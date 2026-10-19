@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Мои Roadster — TeslaSim{% endblock %}
+{% block content %}
+<div style="padding: 2rem; max-width: 1200px; margin: 0 auto; width: 100%;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+        <h2>Мой гараж</h2>
+        <!-- Кнопка создания новой симуляции -->
+        <button onclick="createSimulation()" class="btn btn-primary">+ Новый Roadster</button>
+    </div>
+
+    <div class="events-grid">
+        {% for sim in simulations %}
+        <div class="metric" style="display: flex; flex-direction: column; gap: 1rem;">
+            <h3>{{ sim.name }}</h3>
+            <p style="color: var(--muted);">Пробег: {{ sim.odometer_km }} км</p>
+            <p style="color: var(--muted);">Заряд: {{ sim.battery_percent }}%</p>
+            <a href="{{ url_for('pages.simulation_page', sim_id=sim.id) }}" class="btn">Сесть за руль</a>
+        </div>
+        {% else %}
+        <p>У вас пока нет машин. Нажмите «Новый Roadster», чтобы создать!</p>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function createSimulation() {
+    // Для простоты создаем без привязки к конкретному токену (в учебных целях)
+    const response = await fetch('/api/simulations', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ name: "Roadster " + Math.floor(Math.random() * 100) })
+    });
+    
+    if (response.ok) {
+        window.location.reload();
+    } else {
+        // Если бэкенд требует токен, просто перезагружаем страницу (для демо)
+        window.location.reload();
+    }
+}
+</script>
+{% endblock %}

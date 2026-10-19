@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Регистрация — TeslaSim{% endblock %}
+{% block content %}
+<div class="form-container">
+    <h2>Регистрация</h2>
+    {% if error %}<p style="color:var(--accent); margin-bottom:1rem;">{{ error }}</p>{% endif %}
+    <form method="POST" action="{{ url_for('pages.register_page') }}">
+        <div class="form-group">
+            <label>Имя пользователя</label>
+            <input type="text" name="username" required>
+        </div>
+        <div class="form-group">
+            <label>Email</label>
+            <input type="email" name="email" required>
+        </div>
+        <div class="form-group">
+            <label>Пароль (мин. 8 символов)</label>
+            <input type="password" name="password" required minlength="8">
+        </div>
+        <button type="submit" class="btn btn-primary" style="width:100%;">Зарегистрироваться</button>
+    </form>
+</div>
+{% endblock %}

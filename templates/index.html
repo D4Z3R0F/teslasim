@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}TeslaSim — Главная{% endblock %}
+
+{% block content %}
+<div class="hero">
+    <h1>Испытай Tesla Roadster</h1>
+    <p>Интерактивная симуляция электромобиля: разгон до 100 км/ч за 1.9 секунды, управление батареей и автопилотом.</p>
+    <div class="hero-buttons">
+        <a href="{{ url_for('pages.dashboard') }}" class="btn btn-primary">Начать симуляцию</a>
+        <a href="{{ url_for('pages.register_page') }}" class="btn">Создать аккаунт</a>
+    </div>
+</div>
+{% endblock %}
