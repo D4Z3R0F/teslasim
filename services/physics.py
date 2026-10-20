@@ -1,6 +1,6 @@
-# Технические характеристики Tesla Roadster (второе поколение)
+# Технические характеристики Tesla Roadster
 ROADSTER_SPECS = {
-    "max_speed_kmh": 400,
+    "max_speed_kmh": 250,
     "acceleration_0_100": 1.9,
     "battery_capacity_kwh": 200,
     "range_km": 1000,
@@ -13,17 +13,13 @@ DRIVE_MODES = {
     "sport":  {"accel_mult": 1.8,  "consumption_mult": 1.5},
 }
 
-
 def step_simulation(sim, throttle: float, brake: float, dt: float = 0.1):
-    """
-    throttle ∈ [0, 1], brake ∈ [0, 1].
-    Возвращает словарь с новыми значениями.
-    """
     mode = DRIVE_MODES.get(sim.drive_mode, DRIVE_MODES["normal"])
     max_speed = ROADSTER_SPECS["max_speed_kmh"]
 
     if throttle > 0:
-        accel = mode["accel_mult"] * throttle * 30  # км/ч за секунду
+        # Плавный разгон (10 вместо 30)
+        accel = mode["accel_mult"] * throttle * 10  
         sim.speed_kmh = min(max_speed, sim.speed_kmh + accel * dt)
     elif brake > 0:
         decel = brake * 50
@@ -38,10 +34,8 @@ def step_simulation(sim, throttle: float, brake: float, dt: float = 0.1):
     consumption = battery_per_km * mode["consumption_mult"] * distance
     sim.battery_percent = max(0, sim.battery_percent - consumption)
 
-    # Климат жрёт батарею (упрощение)
     sim.battery_percent = max(0, sim.battery_percent - 0.001 * dt)
 
-    # Запас хода
     range_km = (sim.battery_percent / 100) * ROADSTER_SPECS["range_km"]
 
     return {
@@ -54,13 +48,12 @@ def step_simulation(sim, throttle: float, brake: float, dt: float = 0.1):
         "climate_temp": sim.climate_temp,
     }
 
-
 def check_alerts(sim):
     alerts = []
     if sim.battery_percent < 10:
         alerts.append(("critical", "Батарея почти пуста! Найдите зарядку."))
     elif sim.battery_percent < 20:
         alerts.append(("warning", "Низкий заряд батареи — 20%."))
-    if sim.speed_kmh > 250:
+    if sim.speed_kmh > 200:
         alerts.append(("warning", "Высокая скорость — снизьте!"))
     return alerts

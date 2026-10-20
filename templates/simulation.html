@@ -2,19 +2,15 @@
 {% block title %}3D Симуляция — TeslaSim{% endblock %}
 
 {% block content %}
-<!-- Подключаем Three.js и загрузчик моделей -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
 
 <div class="dashboard" style="display: flex; flex-direction: column; gap: 1rem;">
-    
     <!-- 3D ОКНО -->
-    <div id="3d-container" style="width: 100%; height: 500px; background: radial-gradient(circle at center, #1a1a1a 0%, #000 100%); border-radius: 12px; border: 1px solid #333; position: relative; overflow: hidden;">
-        <div style="position: absolute; top: 10px; left: 20px; color: rgba(255,255,255,0.7); font-family: monospace; z-index: 10;">
-            <div id="speed-ui" style="font-size: 3rem; font-weight: bold; color: var(--accent);">0 <span style="font-size:1rem; color:#888;">км/ч</span></div>
-            <div style="font-size: 0.8rem; margin-top: 5px;">ЛКМ + мышь: вращать камеру</div>
-            <div style="font-size: 0.8rem;">Колесико: приблизить</div>
+    <div id="3d-container" style="width: 100%; height: 500px; background: #000; border-radius: 12px; border: 1px solid #333; position: relative; overflow: hidden;">
+        <div style="position: absolute; top: 10px; left: 20px; color: #fff; font-family: monospace; z-index: 10; text-shadow: 1px 1px 3px #000;">
+            <div id="speed-ui" style="font-size: 3rem; font-weight: bold;">0 <span style="font-size:1rem;">км/ч</span></div>
+            <div style="font-size: 0.9rem; margin-top: 5px; color: #ddd;">Управление: W (Газ) • S (Тормоз) • A/D (Руль)</div>
         </div>
     </div>
 
@@ -34,53 +30,45 @@
             <span class="value"><span id="odometer">0</span> км</span>
         </div>
     </div>
-
-    <!-- КНОПКИ УПРАВЛЕНИЯ -->
-    <div class="controls">
-        <div style="display: flex; gap: 1rem; margin-bottom: 1rem;">
-            <button id="btn-start" class="btn btn-primary" style="flex:1;">▶ Запустить</button>
-            <button id="btn-stop" class="btn btn-danger" style="flex:1;">■ Стоп</button>
-        </div>
-
-        <div class="pedals" style="display: flex; gap: 1rem;">
-            <button id="btn-gas" class="btn pedal-gas" style="flex:1; background:#2ecc71; color:#000; font-weight:bold; padding: 2rem;">ГАЗ</button>
-            <button id="btn-brake" class="btn pedal-brake" style="flex:1; background:var(--accent); color:#fff; font-weight:bold; padding: 2rem;">ТОРМОЗ</button>
-        </div>
-    </div>
 </div>
 {% endblock %}
 
 {% block scripts %}
 <script>
 // ==========================================
-// 1. ЛОГИКА УПРАВЛЕНИЯ (СЕТЬ И КНОПКИ)
+// 1. УПРАВЛЕНИЕ И СЕТЬ
 // ==========================================
 const SIM_ID = {{ sim.id }};
 let running = false;
 let throttle = 0;
 let brake = 0;
-let currentSpeed = 0;
+let serverSpeed = 0;
+const keys = { left: false, right: false };
 
-const gasBtn = document.getElementById('btn-gas');
-const brakeBtn = document.getElementById('btn-brake');
+document.addEventListener('keydown', (e) => {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+    switch(e.key.toLowerCase()) {
+        case 'w': throttle = 1; break;
+        case 's': brake = 1; break;
+        case 'a': keys.left = true; break;
+        case 'd': keys.right = true; break;
+    }
+});
 
-['mousedown', 'touchstart'].forEach(ev => gasBtn.addEventListener(ev, e => { e.preventDefault(); throttle = 1; }));
-['mouseup', 'mouseleave', 'touchend'].forEach(ev => gasBtn.addEventListener(ev, () => throttle = 0));
+document.addEventListener('keyup', (e) => {
+    switch(e.key.toLowerCase()) {
+        case 'w': throttle = 0; break;
+        case 's': brake = 0; break;
+        case 'a': keys.left = false; break;
+        case 'd': keys.right = false; break;
+    }
+});
 
-['mousedown', 'touchstart'].forEach(ev => brakeBtn.addEventListener(ev, e => { e.preventDefault(); brake = 1; }));
-['mouseup', 'mouseleave', 'touchend'].forEach(ev => brakeBtn.addEventListener(ev, () => brake = 0));
-
-document.getElementById('btn-start').onclick = async () => {
+(async () => {
     const r = await fetch(`/api/simulations/${SIM_ID}/start`, { method: 'POST' });
-    if (r.ok) { running = true; showNotification('Поехали!', 'success'); }
-};
-document.getElementById('btn-stop').onclick = async () => {
-    await fetch(`/api/simulations/${SIM_ID}/stop`, { method: 'POST' });
-    running = false;
-    currentSpeed = 0;
-    showNotification('Симуляция остановлена', 'info');
-};
-// Цикл общения с сервером (10 раз в секунду)
+    if (r.ok) { running = true; }
+})();
+
 setInterval(async () => {
     if (!running) return;
     try {
@@ -91,14 +79,14 @@ setInterval(async () => {
         });
         if (!r.ok) return;
         const data = await r.json();
-        
-        currentSpeed = data.speed_kmh; 
+        serverSpeed = data.speed_kmh; 
         updateUI(data);
     } catch (e) { }
 }, 100);
 
 function updateUI(d) {
-    document.getElementById('speed-ui').innerHTML = `${d.speed_kmh} <span style="font-size:1rem; color:#888;">км/ч</span>`;
+    const displaySpeed = Math.round(d.speed_kmh);
+    document.getElementById('speed-ui').innerHTML = `${displaySpeed} <span style="font-size:1rem;">км/ч</span>`;
     document.getElementById('battery').textContent = d.battery_percent;
     document.getElementById('battery-bar').style.width = d.battery_percent + '%';
     document.getElementById('battery-bar').style.background = d.battery_percent < 20 ? '#e74c3c' : '#2ecc71';
@@ -107,128 +95,253 @@ function updateUI(d) {
 }
 
 // ==========================================
-// 2. 3D ДВИЖОК (THREE.JS)
+// 2. 3D МИР
 // ==========================================
 const container = document.getElementById('3d-container');
 const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0d1322);
+scene.fog = new THREE.Fog(0x0d1322, 30, 180); 
 
-// Камера
-const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 1000);
-camera.position.set(5, 3, 8);
-
-// Рендерер
-const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+const camera = new THREE.PerspectiveCamera(60, container.clientWidth / container.clientHeight, 0.1, 1000);
+const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(container.clientWidth, container.clientHeight);
 renderer.shadowMap.enabled = true;
 container.appendChild(renderer.domElement);
 
-// Управление камерой мышкой (вращение)
-const controls = new THREE.OrbitControls(camera, renderer.domElement);
-controls.enableDamping = true;
-controls.dampingFactor = 0.05;
-controls.maxPolarAngle = Math.PI / 2 - 0.05; // Не даем опустить камеру под землю
-
-// Освещение
-const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+const ambientLight = new THREE.AmbientLight(0x334466, 0.5); 
 scene.add(ambientLight);
+const moonLight = new THREE.DirectionalLight(0x7788bb, 0.4);
+moonLight.position.set(-20, 50, -20);
+scene.add(moonLight);
 
-const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
-dirLight.position.set(10, 20, 10);
-dirLight.castShadow = true;
-scene.add(dirLight);
+// Звезды
+const starsGeo = new THREE.BufferGeometry();
+const starsPos = new Float32Array(1500 * 3);
+for(let i=0; i<1500*3; i++) { starsPos[i] = (Math.random() - 0.5) * 500; }
+starsGeo.setAttribute('position', new THREE.BufferAttribute(starsPos, 3));
+const stars = new THREE.Points(starsGeo, new THREE.PointsMaterial({ color: 0xffffff, size: 1.2 }));
+stars.position.y = 50;
+scene.add(stars);
 
-// Пол (дорога)
-const floorGeo = new THREE.PlaneGeometry(200, 200);
-const floorMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.8 });
-const floor = new THREE.Mesh(floorGeo, floorMat);
-floor.rotation.x = -Math.PI / 2;
-floor.receiveShadow = true;
-scene.add(floor);
+const roadWidth = 12;
+const roadLength = 250;
+const road = new THREE.Mesh(new THREE.PlaneGeometry(roadWidth, roadLength), new THREE.MeshStandardMaterial({ color: 0x151515, roughness: 0.9 }));
+road.rotation.x = -Math.PI / 2;
+road.position.z = -roadLength / 2 + 10;
+road.receiveShadow = true;
+scene.add(road);
 
-// Сетка на полу (чтобы было видно движение)
-const gridHelper = new THREE.GridHelper(200, 100, 0x444444, 0x222222);
-gridHelper.position.y = 0.01;
-scene.add(gridHelper);
+const grass = new THREE.Mesh(new THREE.PlaneGeometry(300, roadLength), new THREE.MeshStandardMaterial({ color: 0x1a2e12 }));
+grass.rotation.x = -Math.PI / 2;
+grass.position.set(0, -0.1, -roadLength / 2 + 10);
+scene.add(grass);
+
+const lines = [];
+for (let i = 0; i < 40; i++) {
+    const line = new THREE.Mesh(new THREE.PlaneGeometry(0.4, 4), new THREE.MeshBasicMaterial({ color: 0x888888 }));
+    line.rotation.x = -Math.PI / 2;
+    line.position.set(0, 0.01, -i * 8 + 10);
+    scene.add(line);
+    lines.push(line);
+}
+
+// Массивы для движения
+const trees = [];
+const lamps = [];
+let bushes = null; // Для кустов (используем InstancedMesh)
+
+// --- ФУНКЦИИ ДЕРЕВЬЕВ ---
+const createPine = () => {
+    const tree = new THREE.Group();
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.5, 3), new THREE.MeshStandardMaterial({ color: 0x2a1a0a }));
+    trunk.position.y = 1.5; tree.add(trunk);
+    const leavesMat = new THREE.MeshStandardMaterial({ color: 0x142e14 });
+    for(let i=0; i<3; i++) {
+        const leaves = new THREE.Mesh(new THREE.ConeGeometry(2.5 - i*0.5, 3, 8), leavesMat);
+        leaves.position.y = 3.5 + i * 1.5; tree.add(leaves);
+    }
+    return tree;
+};
+
+const createOak = () => {
+    const tree = new THREE.Group();
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.6, 2.5), new THREE.MeshStandardMaterial({ color: 0x1a1005 }));
+    trunk.position.y = 1.25; tree.add(trunk);
+    const leavesMat = new THREE.MeshStandardMaterial({ color: 0x0f2e0f });
+    for(let i=0; i<5; i++) {
+        const leaves = new THREE.Mesh(new THREE.SphereGeometry(1.5 + Math.random()*0.5, 6, 6), leavesMat);
+        leaves.position.set((Math.random() - 0.5) * 1.5, 3 + (Math.random() - 0.5) * 1.5, (Math.random() - 0.5) * 1.5);
+        tree.add(leaves);
+    }
+    return tree;
+};
+
+// 1. Деревья вдоль дороги
+for (let i = 0; i < 40; i++) {
+    const isPine = Math.random() > 0.5;
+    const tree = isPine ? createPine() : createOak();
+    const side = i % 2 === 0 ? -1 : 1;
+    tree.position.set(side * (roadWidth / 2 + 8 + Math.random() * 10), 0, -i * 6 + 10);
+    scene.add(tree);
+    trees.push(tree);
+}
+
+// 2. Густой лес вдалеке (150 деревьев)
+for (let i = 0; i < 150; i++) {
+    const isPine = Math.random() > 0.5;
+    const tree = isPine ? createPine() : createOak();
+    const side = Math.random() > 0.5 ? -1 : 1;
+    const offset = 25 + Math.random() * 100;
+    const zPos = Math.random() * roadLength - roadLength + 20;
+    tree.position.set(side * (roadWidth / 2 + offset), 0, zPos);
+    const scale = 0.8 + Math.random() * 1.5;
+    tree.scale.set(scale, scale, scale);
+    scene.add(tree);
+    trees.push(tree);
+}
+// 3. КУСТЫ (300 штук вдоль обочины с помощью InstancedMesh для оптимизации)
+const bushGeo = new THREE.SphereGeometry(0.6, 6, 6);
+const bushMat = new THREE.MeshStandardMaterial({ color: 0x1a3b1a });
+bushes = new THREE.InstancedMesh(bushGeo, bushMat, 300);
+const dummy = new THREE.Object3D();
+
+for (let i = 0; i < 300; i++) {
+    const side = Math.random() > 0.5 ? -1 : 1;
+    // Кусты растут близко к дороге (от 7 до 15 метров)
+    const offset = 7 + Math.random() * 8;
+    const zPos = Math.random() * roadLength - roadLength + 10;
+    
+    dummy.position.set(side * (roadWidth / 2 + offset), 0.3, zPos);
+    // Случайный размер куста
+    const s = 0.7 + Math.random() * 0.6;
+    dummy.scale.set(s, s * 0.7, s); 
+    dummy.updateMatrix();
+    bushes.setMatrixAt(i, dummy.matrix);
+}
+scene.add(bushes);
+
+// --- ФОНАРИ ---
+const poleMat = new THREE.MeshStandardMaterial({ color: 0x222222 });
+const bulbMat = new THREE.MeshBasicMaterial({ color: 0xffddaa });
+
+for (let i = 0; i < 5; i++) {
+    const lampL = new THREE.Group();
+    const poleL = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.15, 6), poleMat); poleL.position.y = 3; lampL.add(poleL);
+    const armL = new THREE.Mesh(new THREE.BoxGeometry(2, 0.1, 0.1), poleMat); armL.position.set(1, 5.9, 0); lampL.add(armL);
+    const bulbL = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.1, 0.3), bulbMat); bulbL.position.set(2, 5.8, 0); lampL.add(bulbL);
+    const spotL = new THREE.SpotLight(0xffddaa, 3, 22, Math.PI / 2, 0.9, 1.5); spotL.position.set(2, 5.8, 0); spotL.target.position.set(2, 0, 0); 
+    lampL.add(spotL); lampL.add(spotL.target);
+    lampL.position.set(-roadWidth / 2 + 0.5, 0, -i * 45 + 10); 
+    scene.add(lampL); lamps.push(lampL);
+
+    const lampR = new THREE.Group();
+    const poleR = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.15, 6), poleMat); poleR.position.y = 3; lampR.add(poleR);
+    const armR = new THREE.Mesh(new THREE.BoxGeometry(2, 0.1, 0.1), poleMat); armR.position.set(-1, 5.9, 0); lampR.add(armR);
+    const bulbR = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.1, 0.3), bulbMat); bulbR.position.set(-2, 5.8, 0); lampR.add(bulbR);
+    const spotR = new THREE.SpotLight(0xffddaa, 3, 22, Math.PI / 2, 0.9, 1.5); spotR.position.set(-2, 5.8, 0); spotR.target.position.set(-2, 0, 0); 
+    lampR.add(spotR); lampR.add(spotR.target);
+    lampR.position.set(roadWidth / 2 - 0.5, 0, -i * 45 + 10); 
+    scene.add(lampR); lamps.push(lampR);
+}
 
 // --- МАШИНА ---
 let car = new THREE.Group();
-let mixer = null;
-
-// Попытка загрузить 3D модель (если файла нет, сработает fallback)
 const loader = new THREE.GLTFLoader();
 loader.load('/static/tesla.glb', function (gltf) {
-    // Если файл найден
     car = gltf.scene;
-    car.traverse((node) => {
-        if (node.isMesh) node.castShadow = true;
-    });
-
-    car.rotation.y = Math.PI;
-    
-    // Масштабируем (зависит от исходной модели)
-    car.scale.set(1, 1, 1); 
-    car.position.y = 0;
+    car.traverse((node) => { if (node.isMesh) node.castShadow = true; });
+    car.rotation.y = Math.PI; 
     scene.add(car);
 }, undefined, function (error) {
-    // Если файла нет, рисуем красивый красный суперкар из кубов
-    console.log("Модель не найдена, используем заглушку.");
-    
-    const bodyMat = new THREE.MeshStandardMaterial({ color: 0xe31937, metalness: 0.8, roughness: 0.2 });
-    const body = new THREE.Mesh(new THREE.BoxGeometry(2, 0.5, 4.5), bodyMat);
-    body.position.y = 0.5;
-    body.castShadow = true;
-    
-    const cabinMat = new THREE.MeshStandardMaterial({ color: 0x111111, metalness: 0.9, roughness: 0.1 });
-    const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.4, 2), cabinMat);
-    cabin.position.set(0, 0.95, -0.2);
-    cabin.castShadow = true;
-
-    // Колеса
-    const wheelGeo = new THREE.CylinderGeometry(0.4, 0.4, 0.3, 32);
-    const wheelMat = new THREE.MeshStandardMaterial({ color: 0x222222 });
-    const wheels = [];
-    const wheelPositions = [[-1, 0.4, 1.5], [1, 0.4, 1.5], [-1, 0.4, -1.5], [1, 0.4, -1.5]];
-    wheelPositions.forEach(pos => {
-        const wheel = new THREE.Mesh(wheelGeo, wheelMat);
-        wheel.rotation.z = Math.PI / 2;
-        wheel.position.set(...pos);
-        wheel.castShadow = true;
-        car.add(wheel);
-        wheels.push(wheel);
-    });
-
-    car.add(body);
-    car.add(cabin);
+    const body = new THREE.Mesh(new THREE.BoxGeometry(2, 0.5, 4.5), new THREE.MeshStandardMaterial({ color: 0xe31937, metalness: 0.8 }));
+    body.position.y = 0.5; body.castShadow = true;
+    const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.4, 2), new THREE.MeshStandardMaterial({ color: 0x111111 }));
+    cabin.position.set(0, 0.95, -0.2); cabin.castShadow = true;
+    car.add(body); car.add(cabin);
     scene.add(car);
 });
 
-// Анимация 3D
-let carOffset = 0;
-const clock = new THREE.Clock();
+// Фары
+const headlightL = new THREE.SpotLight(0xffffee, 5, 60, Math.PI / 8, 0.3);
+scene.add(headlightL); scene.add(headlightL.target);
+const headlightR = new THREE.SpotLight(0xffffee, 5, 60, Math.PI / 8, 0.3);
+scene.add(headlightR); scene.add(headlightR.target);
+const taillight = new THREE.PointLight(0xff0000, 3, 15); car.add(taillight);
+
+// ==========================================
+// 3. ИГРОВОЙ ЦИКЛ
+// ==========================================
+let carX = 0, currentSteer = 0, carRoll = 0, visualSpeed = 0;
 
 function animate3D() {
     requestAnimationFrame(animate3D);
+    visualSpeed += (serverSpeed - visualSpeed) * 0.1;
 
-    // Если машина едет, двигаем сетку на полу (эффект движения)
-    if (currentSpeed > 0) {
-        gridHelper.position.z += currentSpeed * 0.05;
-        // Сбрасываем позицию для бесконечной дороги
-        if (gridHelper.position.z > 10) gridHelper.position.z = 0;
-        
-        // Легкая тряска машины от скорости
-        car.position.y = Math.sin(Date.now() * 0.01) * 0.02 * (currentSpeed / 100);
-    } else {
-        car.position.y = 0;
+    let targetSteer = 0;
+    if (keys.left) targetSteer = -1;
+    if (keys.right) targetSteer = 1;
+    currentSteer += (targetSteer - currentSteer) * 0.1;
+
+    if (visualSpeed > 0) {
+        carX += currentSteer * 0.2 * (visualSpeed / 50);
+        if (carX < -roadWidth / 2 + 1.5) carX = -roadWidth / 2 + 1.5;
+        if (carX > roadWidth / 2 - 1.5) carX = roadWidth / 2 - 1.5;
     }
 
-    controls.update();
+    car.position.x = carX;
+    car.rotation.y = Math.PI + (currentSteer * -0.15); 
+    
+    const targetRoll = currentSteer * -0.1 * (visualSpeed / 100);
+    carRoll += (targetRoll - carRoll) * 0.1;
+    car.rotation.z = carRoll;
+
+    // Движение мира
+    if (visualSpeed > 0) {
+        const speedFactor = visualSpeed * 0.02; 
+        
+        // Двигаем разметку
+        lines.forEach(l => { l.position.z += speedFactor; if (l.position.z > 10) l.position.z = -roadLength + 10; });
+        
+        // Двигаем деревья
+        trees.forEach(t => { t.position.z += speedFactor; if (t.position.z > 15) t.position.z = -roadLength + 10; });
+        
+        // Двигаем фонари
+        lamps.forEach(l => { l.position.z += speedFactor; if (l.position.z > 20) l.position.z = -roadLength + 10; });
+        
+        // Двигаем кусты (считываем матрицы, сдвигаем и записываем обратно)
+        for (let i = 0; i < 300; i++) {
+            bushes.getMatrixAt(i, dummy.matrix);
+            dummy.position.setFromMatrixPosition(dummy.matrix);
+            dummy.position.z += speedFactor;
+            if (dummy.position.z > 20) {
+                dummy.position.z = -roadLength + 10;
+            }
+            dummy.updateMatrix();
+            bushes.setMatrixAt(i, dummy.matrix);
+        }
+        bushes.instanceMatrix.needsUpdate = true; // Сообщаем Three.js, что матрицы изменились
+    }
+
+    // Фары
+    const carAngle = currentSteer * 0.15;
+    const fZ = -Math.cos(carAngle) * 2.0;
+    
+    headlightL.position.set(car.position.x - 0.6, 1, car.position.z + fZ);
+    headlightL.target.position.set(car.position.x - 0.6 + Math.sin(carAngle) * 30, 0.5, car.position.z + fZ - Math.cos(carAngle) * 30);
+    
+    headlightR.position.set(car.position.x + 0.6, 1, car.position.z + fZ);
+    headlightR.target.position.set(car.position.x + 0.6 + Math.sin(carAngle) * 30, 0.5, car.position.z + fZ - Math.cos(carAngle) * 30);
+
+    // Камера
+    camera.position.z += (10 - camera.position.z) * 0.05;
+    camera.position.x += (carX * 0.5 - camera.position.x) * 0.05;
+    camera.lookAt(carX, 1, 0);
+    camera.position.y = visualSpeed > 150 ? 4 + Math.sin(Date.now() * 0.02) * 0.015 : 4;
+
     renderer.render(scene, camera);
 }
-
-// Запускаем 3D
 animate3D();
 
-// Обработка изменения размера окна
 window.addEventListener('resize', () => {
     camera.aspect = container.clientWidth / container.clientHeight;
     camera.updateProjectionMatrix();
